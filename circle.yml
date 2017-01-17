@@ -1,0 +1,43 @@
+machine:
+  environment:
+    IMPORT_PATH: "github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME"
+  services:
+    - docker
+
+dependencies:
+  pre:
+    # set up golang dependencies here
+    # you will tell CircleCi where the golang app is hosted using go get
+    - go get github.com/DerfOh/golang-deploys-tutorial
+
+
+  override:
+    # overrides for golang
+    - mkdir -p "$GOPATH/src/$IMPORT_PATH"
+    - rsync -azC --delete ./ "$GOPATH/src/$IMPORT_PATH/"
+    # Ensure the docker service is present
+    - docker info
+    # Specify the build location for docker to create the container as well as your docker registry for the application
+    - docker build --rm=false -t derfoh/golang-deploys-tutorial /home/ubuntu/golang-deploys-tutorial
+
+test:
+  pre:
+    # go tests want to include them, these should be done before pushing to github generally though
+    # - go vet ./...
+    # - go test ./...
+
+  override:
+    # go overrides
+    - docker run -d -p 80:80 derfoh/golang-deploys-tutorial; sleep 10
+    # Test that our webserver is up and serves a page once the container is run
+    - curl --retry 10 --retry-delay 30 -v http://localhost/
+
+# Here we define the branch that CircleCi will be deploying once all the 
+# tests pass, you need to make sure you set your environment variables 
+# within your circle project 
+deployment:
+  hub:
+    branch: master
+    commands:
+      - docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS
+      - docker push derfoh/golang-deploys-tutorial
